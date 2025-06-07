@@ -1,6 +1,6 @@
 /*
  *
- * Copyright © 2020 nicksherron <nsherron90@gmail.com>
+ * Copyright © 2020 nsherron90 <nsherron90@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -31,9 +31,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cheggaaa/pb/v3"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 type cList struct {
@@ -46,8 +45,6 @@ type cList struct {
 type commandsList []cList
 
 var (
-	barTemplate   = `{{string . "message" | green }}{{counters . }} {{bar . }} {{percent . }} {{speed . "%s inserts/sec" | green}}`
-	bar           *pb.ProgressBar
 	progress      bool
 	srcUser       string
 	dstUser       string
@@ -92,12 +89,6 @@ var (
 
 			}
 
-			if workers > 10 && srcURL == "https://bashhub.com" {
-				msg := fmt.Sprintf(`
-	WARNING: errors are likely to occur when setting workers higher
-	than 10 when transferring from https://bashhub.com`)
-				fmt.Print(msg, "\n\n")
-			}
 			run()
 		},
 	}
@@ -120,7 +111,7 @@ func init() {
 func credentials(s string) string {
 
 	fmt.Printf("\nEnter %s password: ", s)
-	bytePassword, err := terminal.ReadPassword(0)
+	bytePassword, err := term.ReadPassword(0)
 	if err != nil {
 		check(err)
 	}
@@ -135,10 +126,6 @@ func run() {
 	dstToken = getToken(dstURL, dstUser, dstPass)
 	cmdList = getCommandList()
 
-	if !progress {
-		bar = pb.ProgressBarTemplate(barTemplate).Start(len(cmdList)).SetMaxWidth(70)
-		bar.Set("message", "transferring ")
-	}
 	fmt.Print("\nstarting transfer...\n\n")
 	queue := make(chan cList, len(cmdList))
 	pipe := make(chan []byte, len(cmdList))
@@ -181,9 +168,6 @@ func run() {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	if !progress {
-		bar.Finish()
-	}
 }
 func sysRegister(mac string, site string, user string, pass string) string {
 
@@ -216,7 +200,7 @@ func sysRegister(mac string, site string, user string, pass string) string {
 		}
 		defer resp.Body.Close()
 
-		buf, err := ioutil.ReadAll(resp.Body)
+		buf, err := io.ReadAll(resp.Body)
 
 		if err != nil {
 			log.Fatal(err)
@@ -303,7 +287,7 @@ func getToken(site string, user string, pass string) string {
 		//	register system
 		return sysRegister(mac, site, user, pass)
 	}
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -339,7 +323,7 @@ func getCommandList() commandsList {
 	if resp.StatusCode != 200 {
 		log.Fatalf("failed to get command list from %v, go status code %v", srcURL, resp.StatusCode)
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -389,7 +373,7 @@ func (item cList) commandLookup(pipe chan []byte, queue chan cList) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		panic(err)
 	}
@@ -412,9 +396,6 @@ func srcSend(data []byte, retries int) {
 			log.SetOutput(os.Stderr)
 			log.Println("Error on response.\n", r)
 			log.SetOutput(nil)
-		}
-		if !progress {
-			bar.Add(1)
 		}
 		atomic.AddUint64(&inserted, 1)
 		wgSrc.Done()

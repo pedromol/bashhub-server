@@ -1,6 +1,6 @@
 /*
  *
- * Copyright © 2020 nicksherron <nsherron90@gmail.com>
+ * Copyright © 2020 nsherron90 <nsherron90@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,11 @@
  *
  */
 
-package internal
+package server
 
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -29,87 +28,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/appleboy/gin-jwt/v2"
+	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/gin-gonic/gin"
+	"github.com/pedromol/bashhub-server/internal/db"
 )
-
-type User struct {
-	ID               uint    `json:"id" gorm:"primary_key"`
-	Username         string  `json:"Username" gorm:"type:varchar(200);unique_index"`
-	Email            string  `json:"email"`
-	Password         string  `json:"password"`
-	Mac              *string `json:"mac" gorm:"-"`
-	RegistrationCode *string `json:"registrationCode"`
-	SystemName       string  `json:"systemName" gorm:"-"`
-}
-
-type Query struct {
-	Command    string  `json:"command"`
-	Path       string  `json:"path"`
-	Created    int64   `json:"created"`
-	Uuid       string  `json:"uuid"`
-	ExitStatus int     `json:"exitStatus"`
-	Username   string  `json:"username"`
-	SystemName string  `gorm:"-"  json:"systemName"`
-	SessionID  *string `json:"sessionId"`
-}
-
-type Command struct {
-	ProcessId        int    `json:"processId"`
-	ProcessStartTime int64  `json:"processStartTime"`
-	Uuid             string `json:"uuid"`
-	Command          string `json:"command"`
-	Created          int64  `json:"created"`
-	Path             string `json:"path"`
-	SystemName       string `json:"systemName"`
-	ExitStatus       int    `json:"exitStatus"`
-	User             User   `gorm:"association_foreignkey:ID"`
-	UserId           uint
-	Limit            int    `gorm:"-"`
-	Unique           bool   `gorm:"-"`
-	Query            string `gorm:"-"`
-	SessionID        string `json:"sessionId"`
-}
-
-type System struct {
-	ID            uint `json:"id" gorm:"primary_key"`
-	Created       int64
-	Updated       int64
-	Mac           string  `json:"mac" gorm:"default:null"`
-	Hostname      *string `json:"hostname"`
-	Name          *string `json:"name"`
-	ClientVersion *string `json:"clientVersion"`
-	User          User    `gorm:"association_foreignkey:ID"`
-	UserId        uint    `json:"userId"`
-}
-
-type Status struct {
-	User                 `json:"-"`
-	ProcessID            int    `json:"-"`
-	Username             string `json:"username"`
-	TotalCommands        int    `json:"totalCommands"`
-	TotalSessions        int    `json:"totalSessions"`
-	TotalSystems         int    `json:"totalSystems"`
-	TotalCommandsToday   int    `json:"totalCommandsToday"`
-	SessionName          string `json:"sessionName"`
-	SessionStartTime     int64  `json:"sessionStartTime"`
-	SessionTotalCommands int    `json:"sessionTotalCommands"`
-}
-
-type Config struct {
-	Secret  string
-	ID      int
-	Created time.Time
-}
-
-type Import Query
-
-var config Config
 
 func getLog(logFile string) io.Writer {
 	switch {
 	case logFile == "/dev/null":
-		return ioutil.Discard
+		return io.Discard
 	case logFile != "":
 		f, err := os.Create(logFile)
 		if err != nil {
@@ -131,7 +58,7 @@ func loggerWithFormatterWriter(logFile string, f gin.LogFormatter) gin.HandlerFu
 
 // configure routes and middleware
 func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
-	dbInit(dbPath)
+	db.Init(dbPath)
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -148,9 +75,10 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 	}))
 
 	// the jwt middleware
+	key, _ := db.GetSecret()
 	authMiddleware, err := jwt.New(&jwt.GinJWTMiddleware{
 		Realm:       "bashhub-server zone",
-		Key:         []byte(config.getSecret()),
+		Key:         []byte(key),
 		Timeout:     10000 * time.Hour,
 		MaxRefresh:  10000 * time.Hour,
 		IdentityKey: "username",
@@ -160,7 +88,7 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 			})
 		},
 		PayloadFunc: func(data interface{}) jwt.MapClaims {
-			if v, ok := data.(*User); ok {
+			if v, ok := data.(*db.User); ok {
 				return jwt.MapClaims{
 					"username":   v.Username,
 					"systemName": v.SystemName,
@@ -179,31 +107,32 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 			default:
 				id = claims["user_id"].(uint)
 			}
-			return &User{
+			return &db.User{
 				Username:   claims["username"].(string),
 				SystemName: claims["systemName"].(string),
 				ID:         id,
 			}
 		},
 		Authenticator: func(c *gin.Context) (interface{}, error) {
-			var user User
+			var user db.User
 
 			if err := c.ShouldBind(&user); err != nil {
 				return "", jwt.ErrMissingLoginValues
 			}
-			if user.userExists() {
-				return &User{
-					Username:   user.Username,
-					SystemName: user.userGetSystemName(),
-					ID:         user.userGetID(),
-				}, nil
+			exists := user.UserExists()
+			if exists != nil {
+				user.SystemName, _ = user.UserGetSystemName()
+				user.ID, _ = user.UserGetID()
+				return &user, nil
 			}
 			fmt.Println("failed")
 
 			return nil, jwt.ErrFailedAuthentication
 		},
 		Authorizator: func(data interface{}, c *gin.Context) bool {
-			if v, ok := data.(*User); ok && v.usernameExists() {
+			v, ok := data.(*db.User)
+			exists, _ := v.UsernameExists()
+			if ok && exists {
 				return true
 			}
 			return false
@@ -232,11 +161,11 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 	r.POST("/api/v1/login", authMiddleware.LoginHandler)
 
 	r.POST("/api/v1/user", func(c *gin.Context) {
-		var user User
-        if !registration {
-            c.String(403, "Registration of new users is not allowed.")
-            return
-        }
+		var user db.User
+		if !registration {
+			c.String(403, "Registration of new users is not allowed.")
+			return
+		}
 		if err := c.ShouldBindJSON(&user); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -245,23 +174,22 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "email required"})
 			return
 		}
-		if user.usernameExists() {
+		if u, _ := user.UsernameExists(); u {
 			c.String(409, "Username already taken")
 			return
 		}
-		if user.emailExists() {
+		if e, _ := user.EmailExists(); e {
 			c.String(409, "This email address is already registered.")
 			return
 		}
-		user.userCreate()
-
+		user.UserCreate()
 	})
 
 	r.Use(authMiddleware.MiddlewareFunc())
 
 	r.GET("/api/v1/command/:path", func(c *gin.Context) {
-		var command Command
-		var user User
+		var command db.Command
+		var user db.User
 		claims := jwt.ExtractClaims(c)
 		switch claims["user_id"].(type) {
 		case float64:
@@ -288,7 +216,7 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 			command.Query = c.Query("query")
 			command.SystemName = c.Query("systemName")
 
-			result, err := command.commandGet()
+			result, err := command.CommandGet()
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
@@ -302,7 +230,7 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 
 		} else {
 			command.Uuid = c.Param("path")
-			result, err := command.commandGetUUID()
+			result, err := command.CommandGetUUID()
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
@@ -314,7 +242,7 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 	})
 
 	r.POST("/api/v1/command", func(c *gin.Context) {
-		var command Command
+		var command db.Command
 		if err := c.ShouldBindJSON(&command); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -332,12 +260,12 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 		}
 
 		command.SystemName = claims["systemName"].(string)
-		command.commandInsert()
+		command.CommandInsert()
 		c.AbortWithStatus(http.StatusOK)
 	})
 
 	r.DELETE("/api/v1/command/:uuid", func(c *gin.Context) {
-		var command Command
+		var command db.Command
 		claims := jwt.ExtractClaims(c)
 		switch claims["user_id"].(type) {
 		case float64:
@@ -347,13 +275,13 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 			command.User.ID = claims["user_id"].(uint)
 		}
 		command.Uuid = c.Param("uuid")
-		command.commandDelete()
+		command.CommandDelete()
 		c.AbortWithStatus(http.StatusOK)
 
 	})
 
 	r.POST("/api/v1/system", func(c *gin.Context) {
-		var system System
+		var system db.System
 		err := c.Bind(&system)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -368,12 +296,12 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 			system.User.ID = claims["user_id"].(uint)
 		}
 
-		system.systemInsert()
+		system.SystemInsert()
 		c.AbortWithStatus(201)
 	})
 
 	r.GET("/api/v1/system", func(c *gin.Context) {
-		var system System
+		var system db.System
 		claims := jwt.ExtractClaims(c)
 		switch claims["user_id"].(type) {
 		case float64:
@@ -388,7 +316,7 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 			return
 		}
 		system.Mac = mac
-		result, err := system.systemGet()
+		result, err := system.SystemGet()
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -398,7 +326,7 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 	})
 
 	r.PATCH("/api/v1/system/:mac", func(c *gin.Context) {
-		var system System
+		var system db.System
 		err := c.Bind(&system)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -413,12 +341,12 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 			system.User.ID = claims["user_id"].(uint)
 		}
 		system.Mac = c.Param("mac")
-		system.systemUpdate()
+		system.SystemUpdate()
 		c.AbortWithStatus(http.StatusOK)
 	})
 
 	r.GET("/api/v1/client-view/status", func(c *gin.Context) {
-		var status Status
+		var status db.Status
 		claims := jwt.ExtractClaims(c)
 		switch claims["user_id"].(type) {
 		case float64:
@@ -443,7 +371,7 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 		}
 		status.ProcessID = pid
 
-		result, err := status.statusGet()
+		result, err := status.StatusGet()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -453,7 +381,7 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 	})
 
 	r.POST("/api/v1/import", func(c *gin.Context) {
-		var imp Import
+		var imp db.Import
 		if err := c.ShouldBindJSON(&imp); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -461,7 +389,7 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 		claims := jwt.ExtractClaims(c)
 		user := claims["username"].(string)
 		imp.Username = user
-		err = importCommands(imp)
+		err = db.ImportCommands(imp)
 		if err != nil {
 			log.Println(err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

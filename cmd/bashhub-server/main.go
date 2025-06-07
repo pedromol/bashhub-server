@@ -1,6 +1,6 @@
 /*
  *
- * Copyright © 2020 nicksherron <nsherron90@gmail.com>
+ * Copyright © 2020 nsherron90 <nsherron90@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,9 @@
 package main
 
 import (
-	"github.com/nicksherron/bashhub-server/cmd"
+	"github.com/pedromol/bashhub-server/internal/cmd"
 )
 
 func main() {
-
 	cmd.Execute()
-
 }
