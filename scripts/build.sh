@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright © 2020 nicksherron <nsherron90@gmail.com>
+# Copyright © 2020 pedromol <nsherron90@gmail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -43,11 +43,11 @@ xgo \
     -out="bashhub-server-${version}" \
     --targets="linux/arm64,linux/arm-7,linux/amd64,linux/386,darwin/amd64,windows/*" \
     --dest=dist \
-    -ldflags "-X github.com/nicksherron/bashhub-server/cmd.Version=${version}
-     -X github.com/nicksherron/bashhub-server/cmd.GitCommit=${commit}
-     -X github.com/nicksherron/bashhub-server/cmd.BuildDate=${build_date}" \
+    -ldflags "-X github.com/pedromol/bashhub-server/cmd.Version=${version}
+     -X github.com/pedromol/bashhub-server/cmd.GitCommit=${commit}
+     -X github.com/pedromol/bashhub-server/cmd.BuildDate=${build_date}" \
     -v -x \
-    github.com/nicksherron/bashhub-server
+    github.com/pedromol/bashhub-server
 
 
 sudo chown -R $USER: dist/

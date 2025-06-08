@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright © 2020 nicksherron <nsherron90@gmail.com>
+# Copyright © 2020 pedromol <nsherron90@gmail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ until [ "$(docker exec ${CONTAINER_1} pg_isready \
     sleep 0.1;
 done;
 
-go test github.com/nicksherron/bashhub-server/internal \
+go test github.com/pedromol/bashhub-server/internal \
   -postgres-uri "postgres://postgres:@localhost:5444?sslmode=disable"
 
 docker stop -t 0 ${CONTAINER_1} & docker wait ${CONTAINER_1}
@@ -53,7 +53,7 @@ until [ "$(docker exec ${CONTAINER_3} pg_isready \
 done;
 
 
-go test github.com/nicksherron/bashhub-server/cmd \
+go test github.com/pedromol/bashhub-server/cmd \
  -src-postgres-uri "postgres://postgres:@localhost:5445?sslmode=disable" \
  -dst-postgres-uri "postgres://postgres:@localhost:5446?sslmode=disable"
 

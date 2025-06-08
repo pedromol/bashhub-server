@@ -1,4 +1,4 @@
-# Copyright © 2020 nicksherron <nsherron90@gmail.com>
+# Copyright © 2020 pedromol <nsherron90@gmail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 #
 #
 
-# GitHub:       https://github.com/nicksherron/bashhub-server
-FROM golang:1.13-alpine AS build
+# GitHub:       https://github.com/pedromol/bashhub-server
+FROM golang:1.24-alpine AS build
 
 ARG VERSION
 ARG GIT_COMMIT
@@ -26,20 +26,20 @@ ENV CGO_ENABLED=${CGO}
 ENV GOOS=linux
 ENV GO111MODULE=on
 
-WORKDIR /go/src/github.com/nicksherron/bashhub-server
+WORKDIR /go/src/github.com/pedromol/bashhub-server
 
-COPY . /go/src/github.com/nicksherron/bashhub-server/
+COPY . /go/src/github.com/pedromol/bashhub-server/
 
 # gcc/g++ are required to build SASS libraries for extended version
 RUN apk update && \
     apk add --no-cache gcc g++ musl-dev
 
 
-RUN go build  -ldflags "-X github.com/nicksherron/bashhub-server/cmd.Version=${VERSION} -X github.com/nicksherron/bashhub-server/cmd.GitCommit=${GIT_COMMIT} -X github.com/nicksherron/bashhub-server/cmd.BuildDate=${BUILD_DATE}" -o /go/bin/bashhub-server
+RUN go build  -ldflags "-X github.com/pedromol/bashhub-server/cmd.Version=${VERSION} -X github.com/pedromol/bashhub-server/cmd.GitCommit=${GIT_COMMIT} -X github.com/pedromol/bashhub-server/cmd.BuildDate=${BUILD_DATE}" -o /go/bin/bashhub-server
 
 # ---
 
-FROM alpine:3.11
+FROM alpine
 
 COPY --from=build /go/bin/bashhub-server /usr/bin/bashhub-server
 

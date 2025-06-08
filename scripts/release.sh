@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright © 2020 nicksherron <nsherron90@gmail.com>
+# Copyright © 2020 pedromol <nsherron90@gmail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

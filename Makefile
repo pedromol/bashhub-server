@@ -5,7 +5,7 @@ VERSION=$(shell git tag | sort --version-sort -r | head -1)
 GIT_COMMIT=$(shell git rev-parse HEAD)
 GIT_DIRTY=$(shell test -n "`git status --porcelain`" && echo "+CHANGES" || true)
 BUILD_DATE=$(shell date '+%Y-%m-%d-%H:%M:%S')
-IMAGE_NAME="nicksherron/bashhub-server"
+IMAGE_NAME="pedromol/bashhub-server"
 
 
 default: help
@@ -25,7 +25,7 @@ help:
 build:
 	@echo "building $(BIN_NAME) $(VERSION)"
 	@echo "GOPATH=$(GOPATH)"
-	go build  -ldflags "-X github.com/nicksherron/bashhub-server/cmd.Version=$(VERSION) -X github.com/nicksherron/bashhub-server/cmd.GitCommit=$(GIT_COMMIT) -X github.com/nicksherron/bashhub-server/cmd.BuildDate=$(BUILD_DATE)" -o bin/${BIN_NAME}
+	go build  -ldflags "-X github.com/pedromol/bashhub-server/cmd.Version=$(VERSION) -X github.com/pedromol/bashhub-server/cmd.GitCommit=$(GIT_COMMIT) -X github.com/pedromol/bashhub-server/cmd.BuildDate=$(BUILD_DATE)" -o bin/${BIN_NAME}
 
 docker-build:
 	docker build --no-cache=true --build-arg VERSION=${VERSION} --build-arg BUILD_DATE=${BUILD_DATE} --build-arg GIT_COMMIT=${GIT_COMMIT}  -t $(IMAGE_NAME) .
