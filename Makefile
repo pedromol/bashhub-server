@@ -1,4 +1,4 @@
-.PHONY: build build-alpine clean test help default docker-build
+.PHONY: build build-alpine clean test test-unit test-integration test-coverage test-postgres test-all help default docker-build
 
 BIN_NAME=bashhub-server
 VERSION=$(shell git tag | sort --version-sort -r | head -1)
@@ -17,9 +17,20 @@ help:
 	@echo '    make build           Compile the project'
 	@echo '    make docker-build    Build docker image'
 	@echo '    make clean           Clean the directory tree'
-	@echo '    make test            Run tests on a compiled project'
+	@echo '    make test            Run all tests'
+	@echo '    make test-unit       Run unit tests only'
+	@echo '    make test-integration Run integration tests only'
+	@echo '    make test-coverage   Run tests with coverage report'
+	@echo '    make test-sql-injection Run SQL injection prevention tests'
+	@echo '    make test-security   Run all security-related tests'
 	@echo '    make test-postgres   Start postgres in ephemeral docker container and run backend tests'
-	@echo '    make test-all        Run test and test-postgres'
+	@echo '    make test-all        Run all test suites'
+	@echo
+	@echo 'Advanced testing with scripts/run_tests.sh:'
+	@echo '    ./scripts/run_tests.sh -t unit           Run unit tests only'
+	@echo '    ./scripts/run_tests.sh -t integration    Run integration tests only'
+	@echo '    ./scripts/run_tests.sh -c               Run with coverage report'
+	@echo '    ./scripts/run_tests.sh -p               Run PostgreSQL integration tests'
 	@echo
 
 build:
@@ -33,11 +44,33 @@ docker-build:
 clean:
 	@test ! -e bin/$(BIN_NAME) || rm bin/$(BIN_NAME)
 
-test:
-	go test ./...
+test: test-unit test-integration
+
+test-unit:
+	@echo "Running unit tests..."
+	go test -v ./internal/...
+
+test-integration:
+	@echo "Running integration tests..."
+	go test -v -tags=integration ./...
+
+test-sql-injection:
+	@echo "Running SQL injection prevention tests..."
+	go test -v ./internal/db/... -run "TestSQLInjection"
+
+test-security:
+	@echo "Running security-related tests..."
+	make test-sql-injection
+
+test-coverage:
+	@echo "Running tests with coverage..."
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
 
 test-postgres:
-	scripts/test_postgres.sh
+	@echo "Starting PostgreSQL for integration tests..."
+	./scripts/run_tests.sh -p -t integration
 
 test-all: test test-postgres
 

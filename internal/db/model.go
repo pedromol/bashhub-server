@@ -1,5 +1,4 @@
 package db
-
 type User struct {
 	ID               uint    `json:"id" gorm:"primary_key"`
 	Username         string  `json:"Username" gorm:"type:varchar(200);unique_index"`
@@ -9,7 +8,6 @@ type User struct {
 	RegistrationCode *string `json:"registrationCode"`
 	SystemName       string  `json:"systemName" gorm:"-"`
 }
-
 type Query struct {
 	Command    string  `json:"command"`
 	Path       string  `json:"path"`
@@ -20,7 +18,6 @@ type Query struct {
 	SystemName string  `gorm:"-"  json:"systemName"`
 	SessionID  *string `json:"sessionId"`
 }
-
 type Command struct {
 	ProcessId        int    `json:"processId"`
 	ProcessStartTime int64  `json:"processStartTime"`
@@ -37,7 +34,6 @@ type Command struct {
 	Query            string `gorm:"-"`
 	SessionID        string `json:"sessionId"`
 }
-
 type System struct {
 	ID            uint `json:"id" gorm:"primary_key"`
 	Created       int64
@@ -49,7 +45,6 @@ type System struct {
 	User          User    `gorm:"association_foreignkey:ID"`
 	UserId        uint    `json:"userId"`
 }
-
 type Status struct {
 	User                 `json:"-"`
 	ProcessID            int    `json:"-"`
@@ -62,5 +57,4 @@ type Status struct {
 	SessionStartTime     int64  `json:"sessionStartTime"`
 	SessionTotalCommands int    `json:"sessionTotalCommands"`
 }
-
 type Import Query
