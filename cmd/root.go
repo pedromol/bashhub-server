@@ -1,21 +1,3 @@
-/*
- *
- * Copyright © 2020 nicksherron <nsherron90@gmail.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
-
 package cmd
 
 import (
@@ -23,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
@@ -31,7 +12,7 @@ import (
 	"syscall"
 
 	"github.com/fatih/color"
-	"github.com/nicksherron/bashhub-server/internal"
+	"github.com/pedromol/bashhub-server/internal"
 	"github.com/spf13/cobra"
 )
 
@@ -68,7 +49,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize()
 	rootCmd.PersistentFlags().StringVar(&logFile, "log", "", `Set filepath for HTTP log. "" logs to stderr`)
-	rootCmd.PersistentFlags().StringVar(&dbPath, "db", sqlitePath(), "db location (sqlite or postgres)")
+	rootCmd.PersistentFlags().StringVar(&dbPath, "db", postgresPath(), "PostgreSQL connection string")
 	rootCmd.PersistentFlags().StringVarP(&addr, "addr", "a", listenAddr(), "Ip and port to listen and serve on")
 	rootCmd.PersistentFlags().BoolVarP(&registration, "registration", "r", true, "Allow user registration")
 
@@ -104,26 +85,12 @@ func listenAddr() string {
 
 }
 
-func sqlitePath() string {
-	dbFile := "data.db"
-	f := filepath.Join(appDir(), dbFile)
-	return f
+func postgresPath() string {
+	// Default PostgreSQL connection for local development
+	return "postgres://postgres:password@localhost:5432/bashhub?sslmode=disable"
 }
 
-func appDir() string {
-	cfgDir, err := os.UserConfigDir()
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	ch := filepath.Join(cfgDir, "bashhub-server")
-	err = os.MkdirAll(ch, 0755)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return ch
-}
 func checkBhEnv() {
 	bhURL := os.Getenv("BH_URL")
 	if strings.Contains(bhURL, "https://bashhub.com") {

@@ -1,21 +1,3 @@
-/*
- *
- * Copyright © 2020 nicksherron <nsherron90@gmail.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
-
 package internal
 
 import (
@@ -29,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/appleboy/gin-jwt/v2"
+	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/gin-gonic/gin"
 )
 
@@ -233,10 +215,10 @@ func setupRouter(dbPath string, logFile string, registration bool) *gin.Engine {
 
 	r.POST("/api/v1/user", func(c *gin.Context) {
 		var user User
-        if !registration {
-            c.String(403, "Registration of new users is not allowed.")
-            return
-        }
+		if !registration {
+			c.String(403, "Registration of new users is not allowed.")
+			return
+		}
 		if err := c.ShouldBindJSON(&user); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return

@@ -1,39 +1,16 @@
-/*
- *
- * Copyright © 2020 nicksherron <nsherron90@gmail.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
-
 package internal
 
 import (
 	"database/sql"
 	"fmt"
 	"log"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/jinzhu/gorm"
 	// db driver are called by gorm
 	_ "github.com/jinzhu/gorm/dialects/postgres"
-	// db driver are called by gorm
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	// db driver are called by database/sql
 	_ "github.com/lib/pq"
-	"github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -45,51 +22,19 @@ var (
 func dbInit(dbPath string) {
 	var gormdb *gorm.DB
 	var err error
-	if strings.HasPrefix(dbPath, "postgres://") {
-		// postgres
 
-		db, err = sql.Open("postgres", dbPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		gormdb, err = gorm.Open("postgres", dbPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		connectionLimit = 50
-	} else {
-		// sqlite
-		gormdb, err = gorm.Open("sqlite3", dbPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		// sqlite regex function
-		regex := func(re, s string) (bool, error) {
-			b, e := regexp.MatchString(re, s)
-			return b, e
-		}
-
-		sql.Register("sqlite3_with_regex",
-			&sqlite3.SQLiteDriver{
-				ConnectHook: func(conn *sqlite3.SQLiteConn) error {
-					return conn.RegisterFunc("regexp", regex, true)
-				},
-			})
-
-		dbPath = fmt.Sprintf("file:%v?cache=shared&mode=rwc&_loc=auto", dbPath)
-		db, err = sql.Open("sqlite3_with_regex", dbPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		_, err = db.Exec("PRAGMA journal_mode=WAL;")
-		if err != nil {
-			log.Fatal(err)
-		}
-		connectionLimit = 1
-
+	// PostgreSQL only
+	db, err = sql.Open("postgres", dbPath)
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	gormdb, err = gorm.Open("postgres", dbPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	connectionLimit = 50
+
 	db.SetMaxOpenConns(connectionLimit)
 	gormdb.AutoMigrate(&User{})
 	gormdb.AutoMigrate(&Command{})
@@ -110,16 +55,9 @@ func dbInit(dbPath string) {
 
 func (c Config) getSecret() string {
 	var err error
-	if connectionLimit != 1 {
-		_, err = db.Exec(`INSERT INTO configs ("id","created", "secret") 
+	_, err = db.Exec(`INSERT INTO configs ("id","created", "secret")
 						VALUES (1, now(), (SELECT md5(random()::text)))
 						ON conflict do nothing;`)
-
-	} else {
-		_, err = db.Exec(`INSERT INTO configs ("id","created" ,"secret") 
-						VALUES (1, current_timestamp, lower(hex(randomblob(16)))) 
-						ON conflict do nothing;`)
-	}
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -240,184 +178,102 @@ func (cmd Command) commandGet() ([]Query, error) {
 		query   string
 	)
 	if cmd.Unique || cmd.Query != "" {
-		//postgres
-		if connectionLimit != 1 {
-			if cmd.SystemName != "" && cmd.Path != "" && cmd.Query != "" && cmd.Unique {
-				query = fmt.Sprintf(`
-				SELECT * FROM  ( 
-			        SELECT DISTINCT ON ("command") command, "uuid", "created"
-			        FROM commands
-			       	WHERE  "user_id" = '%v'  
-			       	AND "path" = '%v' 
-			       	AND "system_name" = '%v'								
-			       	AND "command" ~ '%v'
-			        ) c
-			    ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Path, cmd.SystemName, cmd.Query, cmd.Limit)
+		// PostgreSQL queries with regex support
+		if cmd.SystemName != "" && cmd.Path != "" && cmd.Query != "" && cmd.Unique {
+			query = fmt.Sprintf(`
+			SELECT * FROM  (
+				SELECT DISTINCT ON ("command") command, "uuid", "created"
+				FROM commands
+				WHERE  "user_id" = '%v'
+				AND "path" = '%v'
+				AND "system_name" = '%v'
+				AND "command" ~ '%v'
+				) c
+			ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Path, cmd.SystemName, cmd.Query, cmd.Limit)
 
-			} else if cmd.Path != "" && cmd.Query != "" && cmd.Unique {
-				query = fmt.Sprintf(`
-				SELECT * FROM  ( 
-					SELECT DISTINCT ON ("command") command, "uuid", "created"
-					FROM commands
-					WHERE  "user_id" = '%v'  
-					AND "path" = '%v' 
-					AND "command" ~ '%v'
-					) c
-				ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Path, cmd.Query, cmd.Limit)
+		} else if cmd.Path != "" && cmd.Query != "" && cmd.Unique {
+			query = fmt.Sprintf(`
+			SELECT * FROM  (
+				SELECT DISTINCT ON ("command") command, "uuid", "created"
+				FROM commands
+				WHERE  "user_id" = '%v'
+				AND "path" = '%v'
+				AND "command" ~ '%v'
+				) c
+			ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Path, cmd.Query, cmd.Limit)
 
-			} else if cmd.SystemName != "" && cmd.Query != "" {
-				query = fmt.Sprintf(`
-				SELECT "command", "uuid", "created"
-					FROM commands
-					WHERE  "user_id" = '%v'  
-					AND "system_name" = '%v' 
-					AND "command" ~ '%v'
-				ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.SystemName, cmd.Query, cmd.Limit)
+		} else if cmd.SystemName != "" && cmd.Query != "" {
+			query = fmt.Sprintf(`
+			SELECT "command", "uuid", "created"
+				FROM commands
+				WHERE  "user_id" = '%v'
+				AND "system_name" = '%v'
+				AND "command" ~ '%v'
+			ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.SystemName, cmd.Query, cmd.Limit)
 
-			} else if cmd.Path != "" && cmd.Query != "" {
-				query = fmt.Sprintf(`
-				SELECT "command", "uuid", "created"
-					FROM commands
-					WHERE  "user_id" = '%v'  
-					AND "path" = '%v' 
-					AND "command" ~ '%v'
-				ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Path, cmd.Query, cmd.Limit)
+		} else if cmd.Path != "" && cmd.Query != "" {
+			query = fmt.Sprintf(`
+			SELECT "command", "uuid", "created"
+				FROM commands
+				WHERE  "user_id" = '%v'
+				AND "path" = '%v'
+				AND "command" ~ '%v'
+			ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Path, cmd.Query, cmd.Limit)
 
-			} else if cmd.SystemName != "" && cmd.Unique {
-				query = fmt.Sprintf(`
-				SELECT * FROM  ( 
-					SELECT DISTINCT ON ("command") command, "uuid", "created"
-					FROM commands
-					WHERE  "user_id" = '%v'  
-					AND "system_name" = '%v' 
-					) c
-				ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.SystemName, cmd.Limit)
+		} else if cmd.SystemName != "" && cmd.Unique {
+			query = fmt.Sprintf(`
+			SELECT * FROM  (
+				SELECT DISTINCT ON ("command") command, "uuid", "created"
+				FROM commands
+				WHERE  "user_id" = '%v'
+				AND "system_name" = '%v'
+				) c
+			ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.SystemName, cmd.Limit)
 
-			} else if cmd.Path != "" && cmd.Unique {
-				query = fmt.Sprintf(`
-				SELECT * FROM  ( 
-					SELECT DISTINCT ON ("command") command, "uuid", "created"
-					FROM commands
-					WHERE  "user_id" = '%v'  
-					AND "path" = '%v'
-					) c
-				ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Path, cmd.Limit)
+		} else if cmd.Path != "" && cmd.Unique {
+			query = fmt.Sprintf(`
+			SELECT * FROM  (
+				SELECT DISTINCT ON ("command") command, "uuid", "created"
+				FROM commands
+				WHERE  "user_id" = '%v'
+				AND "path" = '%v'
+				) c
+			ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Path, cmd.Limit)
 
-			} else if cmd.Query != "" && cmd.Unique {
-				query = fmt.Sprintf(`
-				SELECT * FROM  ( 
-					SELECT DISTINCT ON ("command") command, "uuid", "created"
-					FROM commands
-					WHERE  "user_id" = '%v'  
-					AND "command" ~ '%v'
-					) c
-				ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Query, cmd.Limit)
+		} else if cmd.Query != "" && cmd.Unique {
+			query = fmt.Sprintf(`
+			SELECT * FROM  (
+				SELECT DISTINCT ON ("command") command, "uuid", "created"
+				FROM commands
+				WHERE  "user_id" = '%v'
+				AND "command" ~ '%v'
+				) c
+			ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Query, cmd.Limit)
 
-			} else if cmd.Query != "" {
-				query = fmt.Sprintf(`
-				SELECT "command", "uuid", "created"
-					FROM commands
-					WHERE  "user_id" = '%v'  
-					AND "command" ~ '%v'
-				ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Query, cmd.Limit)
+		} else if cmd.Query != "" {
+			query = fmt.Sprintf(`
+			SELECT "command", "uuid", "created"
+				FROM commands
+				WHERE  "user_id" = '%v'
+				AND "command" ~ '%v'
+			ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Query, cmd.Limit)
 
-			} else {
-				// unique
-				query = fmt.Sprintf(`
-				SELECT * FROM  ( 
-					SELECT DISTINCT ON ("command") command, "uuid", "created"
-					FROM commands
-					WHERE  "user_id" = '%v'   
-					) c
-				ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Limit)
-			}
 		} else {
-			// sqlite
-			if cmd.SystemName != "" && cmd.Path != "" && cmd.Query != "" && cmd.Unique {
-				// Have to use fmt.Sprintf to build queries where sqlite regexp function is used because of single quotes. Haven't found any other work around.
-				query = fmt.Sprintf(`
-				SELECT "command",  "uuid", "created" FROM commands
-                    WHERE "user_id" =  '%v'  
-					AND "path" = '%v'
-					AND "system_name" = '%v'
-					AND "command" regexp '%v'
-				GROUP BY "command" ORDER  BY  "created" DESC limit '%v'`, cmd.User.ID, cmd.Path, cmd.SystemName, cmd.Query, cmd.Limit)
-
-			} else if cmd.SystemName != "" && cmd.Query != "" && cmd.Unique {
-				query = fmt.Sprintf(`
-				SELECT "command",  "uuid", "created" FROM commands
-                    WHERE "user_id" =  '%v'  
-					AND "system_name" = '%v' 
-					AND "command" regexp '%v'
-				GROUP BY "command" ORDER  BY  "created" DESC limit '%v'`, cmd.User.ID, cmd.SystemName, cmd.Query, cmd.Limit)
-
-			} else if cmd.Path != "" && cmd.Query != "" && cmd.Unique {
-				query = fmt.Sprintf(`
-				SELECT "command",  "uuid", "created" FROM commands
-                    WHERE "user_id" =  '%v'  
-					AND "path" = '%v' 
-					AND "command" regexp '%v'
-				GROUP BY "command" ORDER  BY  "created" DESC limit '%v'`, cmd.User.ID, cmd.Path, cmd.Query, cmd.Limit)
-
-			} else if cmd.SystemName != "" && cmd.Query != "" {
-				query = fmt.Sprintf(`
-				SELECT "command",  "uuid", "created" FROM commands
-					WHERE "user_id" =  '%v'   
-					AND "system_name" = '%v' 
-					AND "command" regexp '%v'
-				ORDER  BY  "created" DESC limit '%v'`, cmd.User.ID, cmd.SystemName, cmd.Query, cmd.Limit)
-
-			} else if cmd.Path != "" && cmd.Query != "" {
-				query = fmt.Sprintf(`
-				SELECT "command",  "uuid", "created" FROM commands
-					WHERE "user_id" =  '%v'   
-					AND "path" = '%v' 
-					AND "command" regexp '%v'
-				ORDER  BY  "created" DESC limit '%v'`, cmd.User.ID, cmd.Path, cmd.Query, cmd.Limit)
-
-			} else if cmd.SystemName != "" && cmd.Unique {
-				query = fmt.Sprintf(`
-				SELECT "command",  "uuid", "created" FROM commands
-					WHERE  "user_id" = '%v'   
-					AND "system_name" = '%v'
-				GROUP BY "command" ORDER  BY  "created" DESC limit '%v'`, cmd.User.ID, cmd.SystemName, cmd.Limit)
-
-			} else if cmd.Path != "" && cmd.Unique {
-				query = fmt.Sprintf(`
-				SELECT "command",  "uuid", "created" FROM commands
-					WHERE  "user_id" = '%v'   
-					AND "path" = '%v'
-				GROUP BY "command" ORDER  BY  "created" DESC limit '%v'`, cmd.User.ID, cmd.Path, cmd.Limit)
-
-			} else if cmd.Query != "" && cmd.Unique {
-				query = fmt.Sprintf(`
-				SELECT "command", "uuid", "created" FROM commands
-					WHERE "user_id" =  '%v'   
-					AND "command" regexp '%v'  
-				GROUP BY "command" ORDER  BY "created" DESC limit '%v'`, cmd.User.ID, cmd.Query, cmd.Limit)
-
-			} else if cmd.Query != "" {
-				query = fmt.Sprintf(`
-				SELECT "command",  "uuid", "created" FROM commands
-					WHERE "user_id" =  '%v'   
-					AND "command" regexp'%v'
-				ORDER  BY  "created" DESC limit '%v'`, cmd.User.ID, cmd.Query, cmd.Limit)
-
-			} else {
-				// unique
-				query = fmt.Sprintf(`
-				SELECT "command", "uuid", "created"
-					FROM commands
-					WHERE  "user_id" = '%v'  
-				GROUP BY "command"  ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Limit)
-			}
+			// unique
+			query = fmt.Sprintf(`
+			SELECT * FROM  (
+				SELECT DISTINCT ON ("command") command, "uuid", "created"
+				FROM commands
+				WHERE  "user_id" = '%v'
+				) c
+			ORDER BY "created" DESC limit '%v';`, cmd.User.ID, cmd.Limit)
 		}
 	} else {
 		if cmd.Path != "" {
 			query = fmt.Sprintf(`
 			SELECT "command",  "uuid", "created" FROM commands
-				WHERE  "user_id" = '%v' 
-				AND "path" = '%v'  
+				WHERE  "user_id" = '%v'
+				AND "path" = '%v'
 			ORDER  BY  "created" DESC limit '%v'`, cmd.User.ID, cmd.Path, cmd.Limit)
 		} else if cmd.SystemName != "" {
 			query = fmt.Sprintf(`SELECT "command",  "uuid", "created" FROM commands
@@ -428,7 +284,7 @@ func (cmd Command) commandGet() ([]Query, error) {
 		} else {
 			query = fmt.Sprintf(`
 			SELECT "command",  "uuid", "created" FROM commands
-				WHERE  "user_id" = '%v'  
+				WHERE  "user_id" = '%v'
 			ORDER  BY  "created" DESC limit '%v'`, cmd.User.ID, cmd.Limit)
 		}
 
@@ -532,29 +388,16 @@ func (sys System) systemGet() (System, error) {
 
 func (status Status) statusGet() (Status, error) {
 	var err error
-	if connectionLimit != 1 {
-		err = db.QueryRow(`
-		select
-      		( select count(*) from commands where user_id = $1) as totalCommands,
-      		( select count(distinct process_id) from commands where user_id = $1) as totalSessions,
-      		( select count(*) from systems where user_id = $1) as totalSystems,
-      		( select count(*) from commands where to_timestamp(cast(created/1000 as bigint))::date = now()::date and  user_id = $1) as totalCommandsToday,
-      		( select count(*) from commands where process_id = $2) as sessionTotalCommands`,
-			status.User.ID, status.ProcessID).Scan(
-			&status.TotalCommands, &status.TotalSessions, &status.TotalSystems,
-			&status.TotalCommandsToday, &status.SessionTotalCommands)
-	} else {
-		err = db.QueryRow(`
-		select
-      		( select count(*) from commands where user_id = $1) as totalCommands,
-      		( select count(distinct process_id) from commands where user_id = $1) as totalSessions,
-      		( select count(*) from systems where user_id = $1) as totalSystems,
-      		( select count(*) from commands where date(created/1000, 'unixepoch') = date('now') and  user_id = $1) as totalCommandsToday,
-      		( select count(*) from commands where process_id = $2) as sessionTotalCommands`,
-			status.User.ID, status.ProcessID).Scan(
-			&status.TotalCommands, &status.TotalSessions, &status.TotalSystems,
-			&status.TotalCommandsToday, &status.SessionTotalCommands)
-	}
+	err = db.QueryRow(`
+	select
+		( select count(*) from commands where user_id = $1) as totalCommands,
+		( select count(distinct process_id) from commands where user_id = $1) as totalSessions,
+		( select count(*) from systems where user_id = $1) as totalSystems,
+		( select count(*) from commands where to_timestamp(cast(created/1000 as bigint))::date = now()::date and  user_id = $1) as totalCommandsToday,
+		( select count(*) from commands where process_id = $2) as sessionTotalCommands`,
+		status.User.ID, status.ProcessID).Scan(
+		&status.TotalCommands, &status.TotalSessions, &status.TotalSystems,
+		&status.TotalCommandsToday, &status.SessionTotalCommands)
 	if err != nil {
 		return Status{}, err
 	}

@@ -12,7 +12,6 @@ require (
 	github.com/jinzhu/gorm v1.9.12
 	github.com/lib/pq v1.3.0
 	github.com/magiconair/properties v1.8.0
-	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/spf13/cobra v0.0.5
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3

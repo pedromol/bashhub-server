@@ -1,21 +1,3 @@
-/*
- *
- * Copyright © 2020 nicksherron <nsherron90@gmail.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
-
 package internal
 
 import (
@@ -41,7 +23,7 @@ import (
 )
 
 var (
-	testWork         = flag.Bool("testwork", false, "don't remove sqlite db and server log when done and print location")
+	testWork         = flag.Bool("testwork", false, "don't remove db and server log when done and print location")
 	postgres         = flag.String("postgres-uri", "", "postgres uri to use for postgres tests")
 	sessionStartTime int64
 	pid              string
@@ -74,7 +56,7 @@ func TestMain(m *testing.M) {
 
 	dbPath := filepath.Join(testDir, "test.db")
 	logFile := filepath.Join(testDir, "server.log")
-	log.Print("sqlite tests")
+	log.Print("database tests")
 	router = setupRouter(dbPath, logFile, true)
 
 	system = sysStruct{

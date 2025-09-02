@@ -55,7 +55,7 @@ Available Commands:
 
 Flags:
   -a, --addr string   Ip and port to listen and serve on. (default "http://0.0.0.0:8080")
-      --db string     db location (sqlite or postgres)
+      --db string     PostgreSQL connection string
   -h, --help          help for this command
       --log string    Set filepath for HTTP log. "" logs to stderr.
 
@@ -100,26 +100,48 @@ Thats it! Restart your shell and re-run bashhub setup.
 $ $SHELL && bashhub setup
 ```
 
-### Changing default db
-By default the backend db uses sqlite, with the location for each os shown below.
+### Database Configuration
 
+bashhub-server requires **PostgreSQL** for data storage. The server will automatically create all necessary tables and indexes on first run.
 
-| os      | default                                                                          |
-|---------|----------------------------------------------------------------------------------|
-| Unix    | $XDG_CONFIG_HOME/bashhub-server/data.db OR  $HOME/.config/bashhub-server/data.db |
-| Darwin  | $HOME/Library/Application Support/bashhub-server/data.db                         |
-| Windows | %AppData%\bashhub-server\data.db                                                 |
-| Plan 9  | $home/lib/bashhub-server/data.db                                                 |
+#### PostgreSQL Setup
+```bash
+# Create database
+$ createdb bashhub
 
-
-To set a different sqlite db file to use, run
+# Create user (optional)
+$ createuser bashhub_user
+$ psql -c "ALTER USER bashhub_user PASSWORD 'secure_password';"
+$ psql -c "GRANT ALL PRIVILEGES ON DATABASE bashhub TO bashhub_user;"
 ```
-$ bashhub-server --db path/to/file.db
+
+#### Connection String
+```bash
+# Basic connection
+$ bashhub-server --db "postgres://user:password@localhost:5432/bashhub?sslmode=disable"
+
+# With custom user/database
+$ bashhub-server --db "postgres://bashhub_user:secure_password@localhost:5432/bashhub?sslmode=disable"
+
+# Production with SSL
+$ bashhub-server --db "postgres://user:password@prod-db:5432/bashhub?sslmode=require"
 ```
-Postgresql is also supported by bashhub-server. To use postgres specify the postgres uri in the --db flag with the
-following format
-```
-$ bashhub-server --db "postgres://user:password@localhost:5432?sslmode=disable"
+
+#### Docker Setup
+```bash
+# Run PostgreSQL
+$ docker run -d --name postgres \
+  -e POSTGRES_DB=bashhub \
+  -e POSTGRES_USER=bashhub_user \
+  -e POSTGRES_PASSWORD=secure_password \
+  -p 5432:5432 \
+  postgres:15
+
+# Run bashhub-server
+$ docker run -d -p 8080:8080 \
+  --link postgres \
+  -e DB_URL="postgres://bashhub_user:secure_password@postgres:5432/bashhub?sslmode=disable" \
+  pedromol/bashhub-server
 ```
 
 ### Using Regex

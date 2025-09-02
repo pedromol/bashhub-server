@@ -1,21 +1,3 @@
-/*
- *
- * Copyright © 2020 nicksherron <nsherron90@gmail.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
-
 package cmd
 
 import (
@@ -38,7 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/icrowley/fake"
 	"github.com/magiconair/properties/assert"
-	"github.com/nicksherron/bashhub-server/internal"
+	"github.com/pedromol/bashhub-server/internal"
 )
 
 var (
@@ -72,7 +54,7 @@ func init() {
 	flag.StringVar(&dstPass, "dst-pass", "tester", "destination password")
 	flag.IntVar(&workers, "workers", 10, "max number of concurrent requests")
 	flag.IntVar(&commandsN, "number", 200, "number of commmands to use for test")
-	flag.BoolVar(&testWork, "testwork", false, "don't remove sqlite db and server log when done and print location")
+	flag.BoolVar(&testWork, "testwork", false, "don't remove db and server log when done and print location")
 	flag.StringVar(&srcPostgres, "src-postgres-uri", "", "postgres uri to use for postgres tests")
 	flag.StringVar(&dstPostgres, "dst-postgres-uri", "", "postgres uri to use for postgres tests")
 }
