@@ -3,3 +3,11 @@ vendor
 dist
 dist.bk
 scripts/local
+
+# Test artifacts
+coverage.out
+coverage.html
+coverage_*.out
+coverage_*.html
+*.test
+main
